@@ -42,14 +42,15 @@ class InterruptController:
         # If the text contains any command word, we must interrupt.
         # Simple containment check:
         # e.g. "yeah wait" -> contains "wait" -> Interrupt.
-        words = set(cleaned_text.split())
-        if not self.command_words.isdisjoint(words):
-            return True
+        for cmd in self.command_words:
+            if cmd in cleaned_text:
+                return True
 
         # Check for ignore words
         # If the text consists ONLY of ignore words, we should IGNORE (return False).
         # e.g. "yeah" -> subset of ignore -> False.
         # e.g. "yeah sure" -> "sure" not in ignore -> True (Interrupt).
+        words = set(cleaned_text.split())
         if words.issubset(self.ignore_words):
             return False
 
@@ -107,30 +108,14 @@ class InterruptController:
         
         # Logic Matrix
         
-        if self.is_agent_speaking:
-            # Case 1: Agent Speaking.
-            # If we already interrupted, we should have committed/will commit?
-            # Actually if we interrupted, the agent stopped speaking. So is_agent_speaking might be False by now?
-            # It depends on timing.
-            # If we successfully interrupted, the agent state changes to "listening".
-            # So if is_agent_speaking is TRUE here, it means we chose NOT to interrupt (Ignored).
-            # OR we tried to interrupt but it hasn't processed yet.
-            
-            # Re-evaluate logic for safety:
+        if self.interrupted_current_turn:
+            self.session.commit_user_turn()
+        elif self.is_agent_speaking:
             if self._should_interrupt(transcript):
-                # We should have interrupted. Commit it.
-                logger.info(f"Committing interruption: '{transcript}'")
                 self.session.commit_user_turn()
             else:
-                # "Yeah" / "Ok" -> Ignore.
-                logger.info(f"Ignoring soft input: '{transcript}'")
                 self.session.clear_user_turn()
-                
         else:
-            # Case 2: Agent Silent.
-            # Always reply. even to "Yeah".
-            # "Yeah" -> "Great, let's continue."
-            logger.info(f"Committing silent input: '{transcript}'")
             self.session.commit_user_turn()
             
         # Reset transcript for next turn
