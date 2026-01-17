@@ -31,36 +31,49 @@ This ensures:
 - Immediate cutoff on "stop/wait"
 - No modification of the low-level VAD kernel
 
-## Usage
+## Setup
 
-### Running the Agent
+### 1. Install Dependencies
+
+You need `livekit-agents` and the implementation plugins:
 
 ```bash
-# Ensure you are in the examples/voice_agents directory
-cd examples/voice_agents
-
-# Run the intelligent agent in dev mode
-python intelligent_agent.py dev
+pip install livekit-agents livekit-plugins-openai livekit-plugins-deepgram livekit-plugins-silero python-dotenv keyrings-alt
 ```
 
-### Configuration
+### 2. Configure Environment
 
-You can customize the `ignore_words` and `command_words` in `intelligent_agent.py`:
+1.  Create a `.env` file in the project root:
+    ```env
+    LIVEKIT_URL=wss://your-project.livekit.cloud
+    LIVEKIT_API_KEY=your_key
+    LIVEKIT_API_SECRET=your_secret
+    OPENAI_API_KEY=sk-proj-...
+    DEEPGRAM_API_KEY=...
+    ```
+    *(Refer to `.env.example` for a template)*
 
-```python
-controller = InterruptController(
-    session,
-    ignore_words=["yeah", "ok", "uh-huh"],
-    command_words=["stop", "wait", "cancel"]
-)
+### 3. Run the Agent
+
+Navigate to `examples/voice_agents` and run in development mode:
+
+```bash
+python intelligent_agent.py dev
 ```
 
 ## Architecture
 
-- **`intelligent_agent.py`**: The entrypoint. Sets up the `AgentSession` and wires the `InterruptController`.
-- **`interrupt_controller.py`**: Contains the `InterruptController` class which implements the logic matrix.
+- **`intelligent_agent.py`**: 
+    - Entrypoint for the agent.
+    - Configures `AgentSession` with `turn_detection="manual"`.
+    - Initializes STT (Deepgram), LLM (OpenAI), and **TTS (OpenAI)**.
+    - Implements an `on_enter` hook to greet the user immediately upon connection.
+    - Wires up the `InterruptController`.
+- **`interrupt_controller.py`**: 
+    - Contains the `InterruptController` logic layer.
+    - Implements phrase-aware command detection and race-safe turn committal.
 
-## Logic Matrix
+## Interruption Logic Matrix
 
 | User Input | Agent State | Behavior | Logic |
 | :--- | :--- | :--- | :--- |
@@ -70,18 +83,9 @@ controller = InterruptController(
 | "Hello" | Silent | **RESPOND** | Normal behavior. |
 | "Yeah wait" | Speaking | **INTERRUPT** | Mixed input treated as command. |
 
-## Dependencies
-
-- `livekit-agents`
-- `livekit-plugins-deepgram` (for STT)
-- `livekit-plugins-openai` (for LLM)
-- `livekit-plugins-silero` (for VAD)
-
-Ensure environment variables are set for these services.
-
 ## Verification
 
-The following scenarios were tested:
+The following scenarios were verified using `verification_test.py`:
 
 1. **Long Explanation**
    - Agent speaking, user says "yeah", "uh-huh"
@@ -98,5 +102,3 @@ The following scenarios were tested:
 4. **Mixed Input**
    - Agent speaking, user says "yeah but wait"
    - Result: Agent stops due to semantic command ("wait")
-
-These scenarios demonstrate state-aware and semantic-aware interruption handling.

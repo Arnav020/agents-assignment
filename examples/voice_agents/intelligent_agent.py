@@ -29,6 +29,7 @@ async def entrypoint(ctx: JobContext):
         vad=ctx.proc.userdata["vad"],
         stt=deepgram.STT(),
         llm=openai.LLM(),
+        tts=openai.TTS(),
     )
     
     # Initialize our InterruptController
@@ -40,7 +41,12 @@ async def entrypoint(ctx: JobContext):
     session.on("agent_state_changed", controller.on_agent_state_changed)
     session.on("user_state_changed", controller.on_user_state_changed)
 
-    agent = Agent(
+    class IntelligentAgent(Agent):
+        async def on_enter(self):
+            # Generate an initial greeting
+            self.session.generate_reply()
+
+    agent = IntelligentAgent(
         instructions="You are a helpful assistant. If the user says 'yeah' or 'ok' while you are speaking, assume they are listening and continue. If they say it while you are silent, acknowledge it. If they say 'stop', stop immediately.",
     )
     
