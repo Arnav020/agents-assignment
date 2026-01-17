@@ -16,6 +16,21 @@ The solution uses a **Logic Layer** approach:
     - If the agent is **SILENT**:
         - All input is treated as valid.
 
+### Real-Time Guarantee
+
+The interruption decision is made by reconciling:
+- Fast VAD events (user started speaking)
+- Slightly delayed STT transcripts (semantic meaning)
+
+The controller buffers the interruption signal until STT is available and:
+- Cancels it for soft acknowledgements
+- Allows it immediately for semantic commands
+
+This ensures:
+- Zero audible pause or stutter on "yeah/ok"
+- Immediate cutoff on "stop/wait"
+- No modification of the low-level VAD kernel
+
 ## Usage
 
 ### Running the Agent
@@ -63,3 +78,25 @@ controller = InterruptController(
 - `livekit-plugins-silero` (for VAD)
 
 Ensure environment variables are set for these services.
+
+## Verification
+
+The following scenarios were tested:
+
+1. **Long Explanation**
+   - Agent speaking, user says "yeah", "uh-huh"
+   - Result: Agent continues speaking (no pause, no stop)
+
+2. **Passive Affirmation**
+   - Agent silent, user says "yeah"
+   - Result: Agent treats it as valid input and responds
+
+3. **Correction**
+   - Agent speaking, user says "stop"
+   - Result: Agent stops immediately
+
+4. **Mixed Input**
+   - Agent speaking, user says "yeah but wait"
+   - Result: Agent stops due to semantic command ("wait")
+
+These scenarios demonstrate state-aware and semantic-aware interruption handling.
