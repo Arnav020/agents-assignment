@@ -29,6 +29,7 @@ from livekit.agents import (
 from livekit.agents.voice import AgentSession
 from livekit.agents.voice.audio_recognition import TurnDetectionMode  # ✅ Import the enum
 from livekit.agents.voice.events import AgentStateChangedEvent, UserInputTranscribedEvent
+from smart_interruption_session import SmartInterruptionSession
 
 # Import real plugins
 from livekit.plugins import deepgram, openai, silero
@@ -83,6 +84,35 @@ class InterruptionClassifier:
             self.IGNORE_WORDS = set(ignore_words)
         if interrupt_keywords:
             self.INTERRUPT_KEYWORDS = set(interrupt_keywords)
+
+    def has_interrupt_keyword(self, text: str) -> bool:
+        """
+        Quick check if text contains any interrupt keyword.
+        Used for early detection in interim transcripts.
+        """
+        tokens = set(text.lower().split())
+        
+        # Check single-word keywords
+        if tokens & self.INTERRUPT_KEYWORDS:
+            return True
+        
+        # Check multi-word phrases
+        text_lower = text.lower()
+        for keyword in self.INTERRUPT_KEYWORDS:
+            if " " in keyword and keyword in text_lower:
+                return True
+        
+        return False
+    
+    def is_pure_backchanneling(self, text: str) -> bool:
+        """
+        Strict check if text is ONLY backchanneling words.
+        """
+        if not text or not text.strip():
+            return False
+        
+        tokens = set(text.lower().strip().split())
+        return tokens.issubset(self.IGNORE_WORDS)
 
     def should_interrupt(self, transcript: str, agent_speaking: bool) -> bool:
         """
@@ -246,7 +276,9 @@ async def entrypoint(ctx: JobContext):
         tts_instance = openai.TTS(voice="echo")
 
     # Create session with manual turn detection
-    session = AgentSession(
+    # Create session with manual turn detection
+    session = SmartInterruptionSession(
+        handler=handler,
         vad=vad_instance,
         stt=stt_instance,
         llm=llm_instance,
@@ -267,13 +299,18 @@ async def entrypoint(ctx: JobContext):
     )
 
     # Attach Event Handlers BEFORE starting the session
+    # Attach Event Handlers:
+    # Note: SmartInterruptionSession handles interruption logic internally via SmartAgentActivity.
+    # We only keep the state tracker hook if needed for logging/external monitoring, 
+    # but the logic is now inside the activity.
+    
+    # We still need to update the handler's state tracker so the session can use it via self.handler
     @session.on("agent_state_changed")
     async def on_agent_state_changed(event: AgentStateChangedEvent):
         await handler.on_agent_state_changed(event)
     
-    @session.on("user_input_transcribed")
-    async def on_user_input_transcribed(event: UserInputTranscribedEvent):
-        await handler.handle_user_transcript(event, session)
+    # We REMOVE the manual user_input_transcribed hook because SmartAgentActivity handles 
+    # the decision making and committing.
 
     logger.info("Event handlers registered")
     
