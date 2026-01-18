@@ -1,7 +1,21 @@
+# examples/voice_agents/intelligent_interruption_agent.py
 import asyncio
 import logging
 import os
+import sys
+
 from typing import Set
+
+from dotenv import load_dotenv
+
+# Load .env file (try common locations)
+# 1. Check relative to this script (if running from examples/voice_agents)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Look for .env in examples/ (parent of voice_agents)
+examples_env = os.path.join(script_dir, '..', '.env')
+load_dotenv(examples_env)
+# 2. Also try standard CWD load
+load_dotenv()
 
 from livekit.agents import (
     Agent,
@@ -13,13 +27,22 @@ from livekit.agents import (
     llm,
 )
 from livekit.agents.voice import AgentSession
-from livekit.agents.voice.audio_recognition import TurnDetectionMode
-from livekit.plugins import deepgram, openai, silero
+from livekit.agents.voice.audio_recognition import TurnDetectionMode  # ✅ Import the enum
 from livekit.agents.voice.events import AgentStateChangedEvent, UserInputTranscribedEvent
+
+# Import real plugins
+from livekit.plugins import deepgram, openai, silero
 
 # Configure logging
 logger = logging.getLogger("intelligent-interruption")
 logger.setLevel(logging.INFO)
+
+# Add console handler to see logs
+handler = logging.StreamHandler()
+handler.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
 
 class AgentStateTracker:
     """Monitors agent speech state for context-aware interruption handling"""
@@ -72,25 +95,22 @@ class InterruptionClassifier:
         """
         if not agent_speaking:
             # Agent is silent, all user input is valid
+            logger.info(f"Agent silent - accepting all input: '{transcript}'")
             return True
         
         # Agent is speaking - classify the input
         text = transcript.lower().strip()
         tokens = set(text.split())
         
-        # Check for explicit interrupt keywords (Token based)
-        # We handle multi-word keywords by checking if any keyword phrase is present in text
-        # But for primary token matching as requested:
+        # Check for explicit interrupt keywords (single-word tokens)
         if tokens & self.INTERRUPT_KEYWORDS:
-             logger.info(f"Interrupt keyword detected in: '{text}'")
-             return True
+            logger.info(f"Interrupt keyword detected in: '{text}'")
+            return True
 
-        # Fallback for phrases like "hold on" if not in tokens (though prompt said token matched)
-        # We will strictly follow the token intersection for the single words in INTERRUPT_KEYWORDS
-        # If INTERRUPT_KEYWORDS contains phrases, we might need check:
+        # Check for multi-word interrupt phrases like "hold on"
         for keyword in self.INTERRUPT_KEYWORDS:
             if " " in keyword and keyword in text:
-                logger.info(f"Interrupt phrase detected: '{keyword}'")
+                logger.info(f"Interrupt phrase detected: '{keyword}' in '{text}'")
                 return True
 
         # Check if it's ONLY backchanneling words
@@ -125,93 +145,142 @@ class IntelligentInterruptionHandler:
     ) -> bool:
         """
         Process user transcript and decide interruption behavior.
+        
+        Returns:
+            bool: True if interruption was allowed/executed, False if ignored
         """
         transcript = event.transcript
         is_speaking = self.state_tracker.is_agent_speaking()
         should_interrupt = self.classifier.should_interrupt(transcript, is_speaking)
         
         logger.info(
-            f"Transcript: '{transcript}' | "
+            f"[DECISION] Transcript: '{transcript}' | "
             f"Agent speaking: {is_speaking} | "
             f"Should interrupt: {should_interrupt}"
         )
         
         if is_speaking:
             if should_interrupt:
-                # Real interruption - stop the agent
-                # Note: session.interrupt() stops the current audio playback
-                # Since we are in manual mode, we should also likely commit the turn so the agent responds
-                # But interrupt usually just stops TTS.
-                # If we want the agent to RESPOND to the interruption (e.g. "Okay stopping"), 
-                # we need to commit the turn.
+                # Real interruption - stop the agent's current speech
+                logger.info(">>> INTERRUPTING agent speech")
                 
-                # However, usually session.interrupt() is for stopping previous output.
-                # If we want to process the NEW input (the interruption command), we MUST commit it.
+                # Stop current TTS playback
+                await session.interrupt()
+                
+                # Commit the user's turn so the agent processes it and responds
                 await session.commit_user_turn()
+                
                 logger.info("Interruption executed & turn committed")
                 return True
             else:
-                # Backchanneling - ignore
-                # In manual turn detection, if we don't commit, the agent typically ignores it.
-                # But to be safe and clean the buffer, we can clear.
-                # Use clear_user_turn directly on the session assuming verified existence.
+                # Backchanneling - ignore completely
+                logger.info(">>> IGNORING backchanneling - agent continues")
+                
+                # Don't commit the turn - this discards the input
+                # The session will naturally ignore uncommitted turns in manual mode
+                # If clear_user_turn exists, use it to explicitly clear
                 if hasattr(session, 'clear_user_turn'):
-                     await session.clear_user_turn()
-                logger.info("Backchanneling ignored - agent continues")
+                    await session.clear_user_turn()
+                
+                logger.info("Backchanneling discarded - agent continues seamlessly")
                 return False
         else:
             # Agent is silent - commit the turn (normal processing)
+            logger.info(">>> COMMITTING user turn (agent was silent)")
             await session.commit_user_turn()
             logger.info("Valid input during silence - processing")
             return True
 
 async def entrypoint(ctx: JobContext):
     # Load env vars for configuration
-    ignore_words = os.getenv('IGNORE_WORDS', '').split(',') if os.getenv('IGNORE_WORDS') else None
-    interrupt_keywords = os.getenv('INTERRUPT_KEYWORDS', '').split(',') if os.getenv('INTERRUPT_KEYWORDS') else None
+    ignore_words_str = os.getenv('IGNORE_WORDS', '')
+    interrupt_keywords_str = os.getenv('INTERRUPT_KEYWORDS', '')
     
-    # Remove empty strings if any
-    if ignore_words: ignore_words = [w.strip() for w in ignore_words if w.strip()]
-    if interrupt_keywords: interrupt_keywords = [w.strip() for w in interrupt_keywords if w.strip()]
+    ignore_words = None
+    interrupt_keywords = None
+    
+    if ignore_words_str:
+        ignore_words = [w.strip() for w in ignore_words_str.split(',') if w.strip()]
+        logger.info(f"Custom IGNORE_WORDS loaded: {ignore_words}")
+    
+    if interrupt_keywords_str:
+        interrupt_keywords = [w.strip() for w in interrupt_keywords_str.split(',') if w.strip()]
+        logger.info(f"Custom INTERRUPT_KEYWORDS loaded: {interrupt_keywords}")
 
     # Initialize handler
     handler = IntelligentInterruptionHandler(ignore_words, interrupt_keywords)
+    logger.info("Intelligent Interruption Handler initialized")
     
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-    
-    
+    logger.info("Connected to LiveKit room")
 
+    # Determine if we should use fakes or real plugins
+    use_fakes = os.getenv('USE_FAKE_DATA', 'false').lower() == 'true'
+    
+    if use_fakes:
+        logger.info("Using FAKE components (no API cost)")
+        
+        # Try to import fakes from tests directory
+        try:
+            # Try multiple possible import paths
+            try:
+                from tests.fakes import FakeLLM, FakeTTS, FakeVAD, FakeSTT
+            except ImportError:
+                from fakes import FakeLLM, FakeTTS, FakeVAD, FakeSTT
+            
+            vad_instance = FakeVAD()
+            stt_instance = FakeSTT()
+            llm_instance = FakeLLM()
+            tts_instance = FakeTTS()
+            logger.info("✅ Successfully loaded fake components")
+            
+        except ImportError as e:
+            logger.error(f"❌ Failed to import fake components: {e}")
+            logger.error("Make sure fakes.py is in the tests/ directory or current directory")
+            raise
+    else:
+        logger.info("Using REAL plugins (Deepgram/OpenAI)")
+        vad_instance = silero.VAD.load()
+        stt_instance = deepgram.STT(model="nova-3")
+        llm_instance = openai.LLM(model="gpt-4o-mini")
+        tts_instance = openai.TTS(voice="echo")
+
+    # Create session with manual turn detection
     session = AgentSession(
-        vad=silero.VAD.load(),
-        stt=deepgram.STT(model="nova-3"),
-        llm=openai.LLM(model="gpt-4o-mini"),
-        tts=openai.TTS(voice="echo"),
-        turn_detection=TurnDetectionMode.MANUAL,
-        allow_interruptions=True, # Critical for manual control
+        vad=vad_instance,
+        stt=stt_instance,
+        llm=llm_instance,
+        tts=tts_instance,
+        turn_detection=TurnDetectionMode.MANUAL,  # ✅ FIXED: Use enum, not string
+        allow_interruptions=True,  # Critical: enables session.interrupt()
     )
+    
+    logger.info(f"AgentSession created with {'FAKE' if use_fakes else 'REAL'} components")
     
     agent_logic = Agent(
-        instructions="You are a helpful assistant. You will be interrupted effectively.",
+        instructions=(
+            "You are a helpful assistant that provides detailed explanations. "
+            "When explaining something, give thorough responses. "
+            "If someone interrupts you with 'stop' or 'wait', acknowledge and ask what they need. "
+            "Ignore acknowledgments like 'yeah', 'ok', 'hmm' while you're speaking."
+        ),
     )
 
-    # Attach Event Handlers
+    # Attach Event Handlers BEFORE starting the session
     @session.on("agent_state_changed")
     async def on_agent_state_changed(event: AgentStateChangedEvent):
         await handler.on_agent_state_changed(event)
     
     @session.on("user_input_transcribed")
     async def on_user_input_transcribed(event: UserInputTranscribedEvent):
-        # We need to act on the session
         await handler.handle_user_transcript(event, session)
 
-    session.start(agent=agent_logic, room=ctx.room)
+    logger.info("Event handlers registered")
     
-    # Wait for the job to finish (this keeps the process alive)
-    # Usually we await session.start?
-    # agent_session.py start method is async.
-    # await session.start(...)
-    
+    # Start the session (only once!)
     await session.start(agent=agent_logic, room=ctx.room)
+    
+    logger.info("Agent session started and running")
 
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
