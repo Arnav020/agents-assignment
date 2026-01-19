@@ -9,12 +9,9 @@ from typing import Set
 from dotenv import load_dotenv
 
 # Load .env file (try common locations)
-# 1. Check relative to this script (if running from examples/voice_agents)
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Look for .env in examples/ (parent of voice_agents)
 examples_env = os.path.join(script_dir, '..', '.env')
 load_dotenv(examples_env)
-# 2. Also try standard CWD load
 load_dotenv()
 
 from livekit.agents import (

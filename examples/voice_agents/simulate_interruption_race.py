@@ -1,3 +1,4 @@
+# examples/voice_agents/simulate_interruption_race.py
 import asyncio
 import logging
 import os
@@ -62,6 +63,9 @@ async def run_simulation():
     mock_session.interrupt = AsyncMock()
     mock_session.commit_user_turn = AsyncMock()
     mock_session.clear_user_turn = AsyncMock()
+    # Fix option comparison error
+    mock_session.options = MagicMock()
+    mock_session.options.min_interruption_words = 0
     
     # Real handler
     handler = IntelligentInterruptionHandler(ignore_words=None, interrupt_keywords=None)

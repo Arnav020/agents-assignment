@@ -1,3 +1,4 @@
+# exmaples/smart_interruption_session.py
 from __future__ import annotations
 
 import asyncio
