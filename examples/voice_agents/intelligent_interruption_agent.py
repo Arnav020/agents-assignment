@@ -27,7 +27,7 @@ from livekit.agents import (
     llm,
 )
 from livekit.agents.voice import AgentSession
-from livekit.agents.voice.audio_recognition import TurnDetectionMode  # ✅ Import the enum
+# from livekit.agents.voice.audio_recognition import TurnDetectionMode  # Removed: Type alias, not needed for string literal
 from livekit.agents.voice.events import AgentStateChangedEvent, UserInputTranscribedEvent
 from smart_interruption_session import SmartInterruptionSession
 
@@ -283,7 +283,7 @@ async def entrypoint(ctx: JobContext):
         stt=stt_instance,
         llm=llm_instance,
         tts=tts_instance,
-        turn_detection=TurnDetectionMode.MANUAL,  # ✅ FIXED: Use enum, not string
+        turn_detection="manual",  # ✅ FIXED: Use string literal, TurnDetectionMode is a type alias
         allow_interruptions=True,  # Critical: enables session.interrupt()
     )
     
@@ -306,8 +306,8 @@ async def entrypoint(ctx: JobContext):
     
     # We still need to update the handler's state tracker so the session can use it via self.handler
     @session.on("agent_state_changed")
-    async def on_agent_state_changed(event: AgentStateChangedEvent):
-        await handler.on_agent_state_changed(event)
+    def on_agent_state_changed(event: AgentStateChangedEvent):
+        asyncio.create_task(handler.on_agent_state_changed(event))
     
     # We REMOVE the manual user_input_transcribed hook because SmartAgentActivity handles 
     # the decision making and committing.

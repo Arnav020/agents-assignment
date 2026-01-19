@@ -126,7 +126,7 @@ class FakeSTT(STT):
         self._stream_ch = utils.aio.Chan()
 
     # ✅ FIXED: Method name should be 'recognize' not '_recognize_impl'
-    async def recognize(
+    async def _recognize_impl(
         self, 
         buffer: AudioBuffer, 
         *, 
@@ -189,9 +189,9 @@ class FakeTTS(TTS):
         return FakeSynthesizeStream(tts=self, conn_options=conn_options)
 
     # ⚠️ Optional: Only implement if needed by your version of LiveKit
-    # def synthesize(self, text: str, *, conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS) -> ChunkedStream:
-    #     stream = FakeChunkedStream(tts=self, input_text=text, conn_options=conn_options)
-    #     return stream
+    def synthesize(self, text: str, *, conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS) -> ChunkedStream:
+        stream = FakeChunkedStream(tts=self, input_text=text, conn_options=conn_options)
+        return stream
 
 # ✅ FIXED: Added __init__ to initialize _input_text
 class FakeChunkedStream(ChunkedStream):
