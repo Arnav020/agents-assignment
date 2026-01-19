@@ -113,9 +113,7 @@ async def run_simulation():
             # Wait a bit for async tasks to complete
             await asyncio.sleep(0.1)
 
-        # ==========================================
         # Scenario A: Backchannel during speech
-        # ==========================================
         await scenario_runner(
             "A", "Backchannel during speech ('yeah')",
             lambda: set_agent_speaking(True),
@@ -125,9 +123,7 @@ async def run_simulation():
             ]
         )
         
-        # ==========================================
         # Scenario B: Real interrupt during speech
-        # ==========================================
         await scenario_runner(
             "B", "Real interrupt during speech ('stop')",
             lambda: set_agent_speaking(True),
@@ -137,9 +133,7 @@ async def run_simulation():
             ]
         )
 
-        # ==========================================
         # Scenario C: Backchannel while silent
-        # ==========================================
         await scenario_runner(
             "C", "Backchannel while silent ('yeah')",
             lambda: set_agent_speaking(False), # Agent Silent
@@ -149,9 +143,7 @@ async def run_simulation():
             ]
         )
 
-        # ==========================================
         # Scenario D: Mixed semantic interrupt
-        # ==========================================
         await scenario_runner(
             "D", "Mixed semantic interrupt ('yeah but wait')",
             lambda: set_agent_speaking(True),

@@ -44,12 +44,7 @@ class SmartAgentActivity(AgentActivity):
         
         logger.info(f"SmartAgentActivity initialized with buffering (timeout: {self.INTERRUPTION_TIMEOUT_MS}ms)")
     
-    # ================================================================
     # OVERRIDE: on_start_of_speech
-    # ================================================================
-    # ================================================================
-    # OVERRIDE: on_start_of_speech
-    # ================================================================
     def on_start_of_speech(self, ev) -> None:
         """
         Called when VAD detects speech start. Update state but don't interrupt yet.
@@ -62,9 +57,7 @@ class SmartAgentActivity(AgentActivity):
         # Call parent to update user state (Sync)
         super().on_start_of_speech(ev)
     
-    # ================================================================
     # OVERRIDE: on_vad_inference_done
-    # ================================================================
     def on_vad_inference_done(self, ev) -> None:
         """
         CRITICAL: This is where interruption normally triggers.
@@ -108,9 +101,7 @@ class SmartAgentActivity(AgentActivity):
         # Start timeout timer
         asyncio.create_task(self._interruption_timeout(interrupt_id))
 
-    # ================================================================
     # OVERRIDE: on_interim_transcript
-    # ================================================================
     def on_interim_transcript(
         self, 
         ev: SpeechEvent, 
@@ -155,9 +146,7 @@ class SmartAgentActivity(AgentActivity):
         
         # Don't call super() - we're handling this manually
     
-    # ================================================================
     # OVERRIDE: on_final_transcript
-    # ================================================================
     def on_final_transcript(
         self, 
         ev: SpeechEvent, 
@@ -220,9 +209,7 @@ class SmartAgentActivity(AgentActivity):
         
         # Don't call super() - we've handled this manually
     
-    # ================================================================
     # HELPER: Execute Interruption
-    # ================================================================
     async def _execute_interruption(
         self, 
         interrupt_id: str, 
@@ -262,9 +249,7 @@ class SmartAgentActivity(AgentActivity):
         # Log metrics
         log_trace("TTS STOPPED")
     
-    # ================================================================
     # HELPER: Discard Interruption
-    # ================================================================
     async def _discard_interruption(self, interrupt_id: str) -> None:
         """
         Discard a buffered interruption (backchanneling).
@@ -283,9 +268,7 @@ class SmartAgentActivity(AgentActivity):
         
         log_trace("TTS CONTINUES (no gap)")
     
-    # ================================================================
     # HELPER: Timeout
-    # ================================================================
     async def _interruption_timeout(self, interrupt_id: str) -> None:
         """
         Fallback: if STT doesn't complete in time, execute interruption.
@@ -314,9 +297,7 @@ class SmartAgentActivity(AgentActivity):
         
         await self._execute_interruption(interrupt_id, "[TIMEOUT]")
     
-    # ================================================================
     # HELPER: Check if Agent is Speaking
-    # ================================================================
     def _is_agent_speaking(self) -> bool:
         """
         Check if agent is currently speaking.
@@ -361,7 +342,7 @@ class SmartInterruptionSession(AgentSession):
                 old_activity = self._next_activity
                 self._next_activity = SmartAgentActivity(agent, self, self.handler)
                 
-                # ✅ Clean up the old activity
+                #  Clean up the old activity
                 if hasattr(old_activity, 'aclose'):
                     await old_activity.aclose()
                 

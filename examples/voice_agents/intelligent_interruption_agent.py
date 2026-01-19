@@ -259,10 +259,10 @@ async def entrypoint(ctx: JobContext):
             stt_instance = FakeSTT()
             llm_instance = FakeLLM()
             tts_instance = FakeTTS()
-            logger.info("✅ Successfully loaded fake components")
+            logger.info(" Successfully loaded fake components")
             
         except ImportError as e:
-            logger.error(f"❌ Failed to import fake components: {e}")
+            logger.error(f" Failed to import fake components: {e}")
             logger.error("Make sure fakes.py is in the tests/ directory or current directory")
             raise
     else:
@@ -280,7 +280,7 @@ async def entrypoint(ctx: JobContext):
         stt=stt_instance,
         llm=llm_instance,
         tts=tts_instance,
-        turn_detection="manual",  # ✅ FIXED: Use string literal, TurnDetectionMode is a type alias
+        turn_detection="manual",  #  FIXED: Use string literal, TurnDetectionMode is a type alias
         allow_interruptions=True,  # Critical: enables session.interrupt()
     )
     

@@ -38,7 +38,7 @@ from livekit.agents.types import DEFAULT_API_CONNECT_OPTIONS, NOT_GIVEN, APIConn
 from livekit.agents.utils.audio import AudioBuffer
 from livekit.agents import utils
 
-# --- Fake LLM ---
+# Fake LLM 
 
 class FakeLLMResponse(BaseModel):
     type: Literal["llm"] = "llm"
@@ -107,7 +107,7 @@ class FakeLLMStream(LLMStream):
             return items[-1].text_content
         return ""
 
-# --- Fake STT ---
+# Fake STT 
 
 class FakeUserSpeech(BaseModel):
     type: Literal["user_speech"] = "user_speech"
@@ -125,7 +125,7 @@ class FakeSTT(STT):
         self._recognize_ch = utils.aio.Chan()
         self._stream_ch = utils.aio.Chan()
 
-    # ✅ FIXED: Method name should be 'recognize' not '_recognize_impl'
+    # FIXED: Method name should be 'recognize' not '_recognize_impl'
     async def _recognize_impl(
         self, 
         buffer: AudioBuffer, 
@@ -179,7 +179,7 @@ class FakeRecognizeStream(RecognizeStream):
         async for _ in self._input_ch: 
             pass
 
-# --- Fake TTS ---
+# Fake TTS 
 
 class FakeTTS(TTS):
     def __init__(self) -> None:
@@ -188,12 +188,11 @@ class FakeTTS(TTS):
     def stream(self, *, conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS) -> SynthesizeStream:
         return FakeSynthesizeStream(tts=self, conn_options=conn_options)
 
-    # ⚠️ Optional: Only implement if needed by your version of LiveKit
+    # Optional: Only implement if needed by your version of LiveKit
     def synthesize(self, text: str, *, conn_options: APIConnectOptions = DEFAULT_API_CONNECT_OPTIONS) -> ChunkedStream:
         stream = FakeChunkedStream(tts=self, input_text=text, conn_options=conn_options)
         return stream
 
-# ✅ FIXED: Added __init__ to initialize _input_text
 class FakeChunkedStream(ChunkedStream):
     def __init__(self, tts: FakeTTS, input_text: str, conn_options: APIConnectOptions):
         super().__init__(tts=tts, conn_options=conn_options)
@@ -223,7 +222,7 @@ class FakeSynthesizeStream(SynthesizeStream):
                 output_emitter.push(b"\x00\x00" * num_samples)
                 output_emitter.flush()
 
-# --- Fake VAD ---
+# Fake VAD 
 class FakeVAD(VAD):
     def __init__(self) -> None:
         super().__init__(capabilities=VADCapabilities(update_interval=0.1))
