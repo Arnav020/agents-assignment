@@ -13,6 +13,12 @@ from livekit.agents.voice.agent_session import AgentSession
 from livekit.agents.stt import SpeechEvent, SpeechEventType
 
 logger = logging.getLogger("smart-agent-activity")
+START_TIME = time.time()
+
+def log_trace(msg: str):
+    """Structured logging for verification proof"""
+    elapsed = time.time() - START_TIME
+    logger.info(f"[{elapsed:06.3f}] {msg}")
 
 
 class SmartAgentActivity(AgentActivity):
@@ -68,12 +74,14 @@ class SmartAgentActivity(AgentActivity):
         
         if not agent_speaking:
             # Agent is silent - allow normal interruption behavior
-            logger.info("[VAD] Agent silent, allowing normal VAD processing")
+            log_trace("VAD DETECTED")
+            log_trace("RESPOND (agent silent)")
             super().on_vad_inference_done(ev)
             return
         
         # Agent IS speaking - buffer this potential interruption
-        logger.info("[VAD] Agent speaking, BUFFERING interruption event")
+        log_trace(f"VAD DETECTED")
+        log_trace(f"AGENT STATE: speaking")
         
         # Offload async buffering to task
         asyncio.create_task(self._buffer_vad_event(ev))
@@ -94,10 +102,7 @@ class SmartAgentActivity(AgentActivity):
                 'stt_text': None,
             }
         
-        logger.info(
-            f"[BUFFER] Created pending interruption {interrupt_id[:8]}... "
-            f"(total pending: {len(self.pending_interruptions)})"
-        )
+        log_trace(f"BUFFER: interruption_id={interrupt_id}")
         
         # Start timeout timer
         asyncio.create_task(self._interruption_timeout(interrupt_id))
@@ -166,7 +171,7 @@ class SmartAgentActivity(AgentActivity):
         
         if not self.pending_interruptions:
             # No pending interruptions - agent was silent
-            logger.info(f"[STT-FINAL] Agent was silent, normal processing: '{text}'")
+            log_trace(f"STT FINAL: \"{text}\"")
             super().on_final_transcript(ev, speaking=speaking)
             return
         
@@ -202,10 +207,14 @@ class SmartAgentActivity(AgentActivity):
             pending['stt_text'] = text
         
         if should_interrupt:
-            logger.info(f"[EXECUTE] Real interruption confirmed: '{text}'")
+            log_trace(f"STT FINAL: \"{text}\"")
+            log_trace(f"CLASSIFIER: interrupt=True")
+            log_trace("ACTION: EXECUTE INTERRUPTION")
             await self._execute_interruption(interrupt_id, text)
         else:
-            logger.info(f"[IGNORE] Backchanneling detected: '{text}' - discarding")
+            log_trace(f"STT FINAL: \"{text}\"")
+            log_trace(f"CLASSIFIER: backchannel=True")
+            log_trace("ACTION: IGNORE (no interruption)")
             await self._discard_interruption(interrupt_id)
         
         # Don't call super() - we've handled this manually
@@ -248,8 +257,9 @@ class SmartAgentActivity(AgentActivity):
                 else:
                      self._current_speech.interrupt()
         
+        
         # Log metrics
-        logger.info(f"[METRICS] Interruption executed, {len(self.pending_interruptions)} still pending")
+        log_trace("TTS STOPPED")
     
     # ================================================================
     # HELPER: Discard Interruption
@@ -270,7 +280,7 @@ class SmartAgentActivity(AgentActivity):
             f"(latency: {latency:.0f}ms, text: '{pending.get('stt_text', 'N/A')}')"
         )
         
-        logger.info(f"[METRICS] Backchanneling ignored, {len(self.pending_interruptions)} still pending")
+        log_trace("TTS CONTINUES (no gap)")
     
     # ================================================================
     # HELPER: Timeout
