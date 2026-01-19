@@ -168,6 +168,28 @@ Automated tests validating:
 
 ---
 
+## 6. How to Run Verification
+
+You can verify the solution using the provided simulation and test scripts.
+
+### 1. Run the Race Condition Simulation
+This script simulates the VAD/STT timing delays and outputs a proof log.
+
+```bash
+python examples/voice_agents/simulate_interruption_race.py
+```
+
+**Check the output:** `interruption_log_proof.txt` will be generated in the root directory.
+
+### 2. Run Formal PyTest Requirements
+This runs the full test suite asserting all edge cases (backchannel, interrupt, silent, mixed).
+
+```bash
+python -m pytest examples/voice_agents/test_timing_race.py -v
+```
+
+---
+
 ## Summary: Why This Solves the Task
 
 | Requirement | How It's Solved |
